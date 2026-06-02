@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>근무 배정 뽑기 — 마케팅팀</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nanum+Gothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; image-rendering: pixelated; }
+
+:root {
+  --bg: #0a0a1a;
+  --panel: #12122a;
+  --panel2: #1a1a3a;
+  --border: #3a3a7a;
+  --purple: #8b5cf6;
+  --purple-light: #c4b5fd;
+  --cyan: #22d3ee;
+  --cyan-dark: #0891b2;
+  --yellow: #fde047;
+  --green: #4ade80;
+  --red: #f87171;
+  --white: #e2e8f0;
+  --gray: #64748b;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes pop { 0%{transform:scale(0.5) rotateY(90deg);opacity:0} 60%{transform:scale(1.1) rotateY(0deg);opacity:1} 100%{transform:scale(1) rotateY(0deg);opacity:1} }
+@keyframes glow { 0%,100%{box-shadow:0 0 8px var(--purple), 0 0 16px var(--purple)} 50%{box-shadow:0 0 16px var(--purple), 0 0 32px var(--purple), 0 0 48px var(--purple)} }
+@keyframes starfall { 0%{transform:translateY(-20px);opacity:1} 100%{transform:translateY(60px);opacity:0} }
+@keyframes marquee { 0%{transform:translateX(100%)} 100%{transform:translateX(-100%)} }
+@keyframes slideIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+body {
+  font-family: 'Press Start 2P', monospace;
+  background: var(--bg);
+  color: var(--white);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.stars { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.star { position: absolute; width: 2px; height: 2px; background: white; animation: blink var(--d, 2s) infinite var(--delay, 0s); }
+
+.marquee-bar {
+  background: var(--purple);
+  padding: 10px 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 4px solid var(--purple-light);
+}
+.marquee-text {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--yellow);
+  animation: marquee 18s linear infinite;
+  letter-spacing: 0.15em;
+}
+
+.wrapper {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+  position: relative;
+  z-index: 1;
+}
+
+.header { text-align: center; margin: 24px 0 36px; }
+.header .sub {
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 0.2em;
+  margin-bottom: 18px;
+}
+.header h1 {
+  font-size: 20px;
+  line-height: 1.8;
+  color: var(--yellow);
+  text-shadow: 3px 3px 0 #7c3aed, 6px 6px 0 #4c1d95;
+  margin-bottom: 14px;
+  animation: float 3s ease-in-out infinite;
+}
+.header .press-start {
+  font-size: 11px;
+  color: var(--white);
+  animation: blink 1s infinite;
+}
+
+/* 날짜 탭 */
+.day-tabs { display: flex; gap: 6px; margin-bottom: 24px; }
+.day-tab {
+  flex: 1;
+  padding: 14px 4px;
+  border: 4px solid var(--border);
+  background: var(--panel2);
+  color: var(--gray);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  cursor: pointer;
+  text-align: center;
+  line-height: 2;
+  box-shadow: 4px 4px 0 #000;
+  transition: none;
+  position: relative;
+}
+.day-tab:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #000; }
+.day-tab.active { border-color: var(--cyan); color: var(--cyan); background: rgba(34,211,238,0.1); box-shadow: 4px 4px 0 #000, 0 0 12px var(--cyan); }
+.day-tab.done { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
+.day-tab .tab-day { font-size: 14px; display: block; margin-bottom: 4px; }
+.day-tab .tab-date { font-size: 9px; display: block; }
+.day-tab.done::after { content: '✓ DONE'; display: block; font-size: 8px; color: var(--green); margin-top: 6px; }
+
+/* 미배정 경고 배너 */
+.must-banner {
+  display: none;
+  background: rgba(253,224,71,0.12);
+  border: 3px solid var(--yellow);
+  padding: 10px 14px;
+  font-size: 10px;
+  color: var(--yellow);
+  margin-bottom: 16px;
+  line-height: 2;
+  text-align: center;
+  animation: slideIn 0.3s ease;
+}
+.must-banner.visible { display: block; }
+
+/* 안내 문구 */
+.guide-box {
+  background: var(--panel2);
+  border: 3px solid var(--border);
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--yellow);
+  margin-bottom: 24px;
+  text-align: center;
+  line-height: 2;
+  min-height: 50px;
+}
+.guide-box::before { content: '▶ '; }
+
+/* 카드 영역 */
+.cards-area {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.card-wrap { perspective: 800px; width: 106px; height: 148px; cursor: pointer; }
+.card-wrap.locked { cursor: default; }
+.card-wrap.must-pick { filter: drop-shadow(0 0 8px var(--yellow)); animation: blink 0.8s infinite; }
+
+.card-inner {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(.4,0,.2,1);
+}
+.card-inner.flipped { transform: rotateY(180deg); }
+
+.card-face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+  border: 4px solid var(--border);
+  box-shadow: 4px 4px 0 #000;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  background: var(--panel);
+}
+
+.card-back { gap: 8px; }
+.card-back-sprite {
+  width: 56px; height: 72px;
+  background: var(--panel2);
+  border: 2px solid var(--purple);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 4px;
+  position: relative;
+}
+.card-back-sprite::before {
+  content: '';
+  position: absolute; inset: 4px;
+  border: 2px solid rgba(139,92,246,0.3);
+}
+.sprite-icon { font-size: 24px; animation: float 2s ease-in-out infinite; }
+.card-back-label { font-size: 8px; color: var(--purple-light); letter-spacing: 0.1em; }
+
+.card-back:hover { border-color: var(--purple); box-shadow: 4px 4px 0 #000, 0 0 10px var(--purple); }
+.card-back:hover .card-back-sprite { border-color: var(--purple-light); }
+
+.card-front { transform: rotateY(180deg); gap: 10px; animation: pop 0.4s ease forwards; }
+.card-front.am { border-color: var(--purple); box-shadow: 4px 4px 0 #000, 0 0 12px var(--purple); background: #1a0a3a; }
+.card-front.pm { border-color: var(--cyan); box-shadow: 4px 4px 0 #000, 0 0 12px var(--cyan); background: #0a1a2a; }
+.card-front.rest { border-color: var(--gray); background: #111; }
+
+.slot-label { font-size: 9px; letter-spacing: 0.1em; padding: 4px 10px; border: 2px solid; }
+.slot-label.am { color: var(--purple-light); border-color: var(--purple); background: rgba(139,92,246,0.2); }
+.slot-label.pm { color: var(--cyan); border-color: var(--cyan); background: rgba(34,211,238,0.15); }
+
+.card-name-display { font-size: 11px; color: var(--white); text-align: center; line-height: 1.6; }
+.card-front.am .card-name-display { color: var(--purple-light); }
+.card-front.pm .card-name-display { color: var(--cyan); }
+.card-front.rest .card-name-display { color: var(--gray); }
+
+/* 결과 박스 */
+.result-row { display: flex; gap: 12px; margin-bottom: 24px; }
+.result-box {
+  flex: 1;
+  border: 4px solid var(--border);
+  background: var(--panel2);
+  padding: 14px 12px;
+  min-height: 100px;
+  box-shadow: 4px 4px 0 #000;
+}
+.result-box.am { border-color: var(--purple); }
+.result-box.pm { border-color: var(--cyan); }
+
+.result-box-label {
+  font-size: 9px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}
+.result-box.am .result-box-label { color: var(--purple-light); border-color: var(--purple); }
+.result-box.pm .result-box-label { color: var(--cyan); border-color: var(--cyan); }
+
+.result-name { font-size: 10px; padding: 5px 0; display: block; animation: pop 0.3s ease; }
+.result-box.am .result-name { color: var(--purple-light); }
+.result-box.pm .result-name { color: var(--cyan); }
+
+/* 버튼 */
+.btn-row { display: flex; gap: 12px; justify-content: center; }
+.btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  padding: 12px 20px;
+  border: 4px solid;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #000;
+  transition: none;
+  line-height: 1.6;
+  letter-spacing: 0.05em;
+}
+.btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #000; }
+.btn-reset { background: var(--panel2); border-color: var(--border); color: var(--white); }
+.btn-reset:hover { border-color: var(--red); color: var(--red); }
+.btn-summary { background: var(--purple); border-color: var(--purple-light); color: var(--yellow); display: none; animation: glow 2s infinite; }
+.btn-summary:hover { background: #7c3aed; }
+
+/* 결과 요약 */
+.summary { margin-top: 36px; display: none; }
+.summary.visible { display: block; animation: slideIn 0.4s ease; }
+
+.summary-header {
+  background: var(--purple);
+  border: 4px solid var(--purple-light);
+  border-bottom: none;
+  padding: 14px 18px;
+  font-size: 12px;
+  color: var(--yellow);
+  box-shadow: 4px 4px 0 #000;
+  text-shadow: 2px 2px 0 #4c1d95;
+}
+.summary-body {
+  border: 4px solid var(--purple-light);
+  border-top: 2px solid var(--purple-light);
+  background: var(--panel);
+  box-shadow: 4px 4px 0 #000;
+  overflow: hidden;
+}
+.summary-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr;
+  border-bottom: 2px solid var(--border);
+  font-size: 9px;
+  line-height: 2;
+}
+.summary-row:last-child { border-bottom: none; }
+.summary-row.header-row { background: var(--panel2); color: var(--cyan); }
+.summary-row.all-day { background: rgba(74,222,128,0.06); }
+.summary-cell { padding: 12px 12px; border-right: 2px solid var(--border); }
+.summary-cell:last-child { border-right: none; }
+.summary-date { color: var(--yellow); }
+.chip-am { color: var(--purple-light); }
+.chip-pm { color: var(--cyan); }
+.chip-all { color: var(--green); }
+
+.summary-note {
+  background: var(--panel2);
+  border: 4px solid var(--border);
+  border-top: none;
+  padding: 14px;
+  font-size: 9px;
+  color: var(--gray);
+  line-height: 2.4;
+  box-shadow: 4px 4px 0 #000;
+}
+
+.particle { position: fixed; pointer-events: none; font-size: 18px; z-index: 999; animation: starfall 0.8s ease-out forwards; }
+
+.footer {
+  text-align: center;
+  margin-top: 48px;
+  font-size: 9px;
+  color: var(--border);
+  line-height: 2.4;
+}
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<div class="marquee-bar">
+  <span class="marquee-text">★ 2026 서울국제도서전 ★ 문학과지성사 마케팅팀 ★ 근무 배정 뽑기 ★ PRESS START ★ 2026 서울국제도서전 ★ 문학과지성사 마케팅팀 ★ 근무 배정 뽑기 ★ PRESS START ★</span>
+</div>
+
+<div class="wrapper">
+  <header class="header">
+    <p class="sub">▸ MARKETING TEAM ◂</p>
+    <h1>근무 배정<br>CARD DRAW</h1>
+    <p class="press-start">▼ CARD를 CLICK 하세요 ▼</p>
+  </header>
+
+  <div class="day-tabs">
+    <button class="day-tab active" id="tab-wed" onclick="selectDay('wed')">
+      <span class="tab-day">수</span>
+      <span class="tab-date">6/24</span>
+    </button>
+    <button class="day-tab" id="tab-thu" onclick="selectDay('thu')">
+      <span class="tab-day">목</span>
+      <span class="tab-date">6/25</span>
+    </button>
+    <button class="day-tab" id="tab-fri" onclick="selectDay('fri')">
+      <span class="tab-day">금</span>
+      <span class="tab-date">6/26</span>
+    </button>
+  </div>
+
+  <div class="must-banner" id="must-banner"></div>
+  <div class="guide-box" id="guide">카드를 한 장씩 클릭하세요!</div>
+
+  <div class="cards-area" id="cards-area"></div>
+
+  <div class="result-row">
+    <div class="result-box am">
+      <p class="result-box-label">AM 09:30</p>
+      <div id="am-result"></div>
+    </div>
+    <div class="result-box pm">
+      <p class="result-box-label">PM 13:30</p>
+      <div id="pm-result"></div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-reset" onclick="shuffleCards()">↺ RETRY</button>
+    <button class="btn btn-summary" id="summary-btn" onclick="showSummary()">★ RESULT ★</button>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="summary-header">▸ FINAL RESULT — 최종 근무 배정표</div>
+    <div class="summary-body">
+      <div class="summary-row header-row">
+        <div class="summary-cell">DATE</div>
+        <div class="summary-cell">AM 09:30</div>
+        <div class="summary-cell">PM 13:30</div>
+      </div>
+      <div id="summary-rows"></div>
+    </div>
+    <div class="summary-note">
+      ▸ 화(6/23) · 토(6/27) · 일(6/28) — 마케팅팀 전원 근무<br>
+      ▸ 수·목·금 오전 2명 / 오후 2명 — 위 뽑기 결과 적용<br>
+      ▸ 수 미배정자 → 목/금 중 반드시 배정<br>
+      ▸ 목 미배정자 → 금 반드시 배정
+    </div>
+  </div>
+
+  <div class="footer">
+    MARKETING TEAM DUTY DRAW v2.0<br>
+    문학과지성사 © 2026<br>
+    ▸ INSERT COIN TO CONTINUE ◂
+  </div>
+</div>
+
+<script>
+const members = ['이가은','허황','남미리','맹정현','최지애'];
+const days = ['wed','thu','fri'];
+const dayNames = { wed:'6/24(수)', thu:'6/25(목)', fri:'6/26(금)' };
+const particles = ['★','✦','♦','▲','●','◆'];
+
+let currentDay = 'wed';
+let assignments = {};   // { wed: {이름: 'am'|'pm'|'rest'}, ... }
+let orders = {};        // { wed: [이름순서], ... }
+let flippedCount = {};  // { wed: n, ... }
+let mustPick = {};      // { thu: [이름...], fri: [이름...] } — 반드시 먼저 뽑혀야 할 사람
+
+days.forEach(d => { assignments[d] = {}; flippedCount[d] = 0; mustPick[d] = []; });
+
+// 별 생성
+const starsEl = document.getElementById('stars');
+for(let i = 0; i < 60; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${1+Math.random()*3}s;--delay:${Math.random()*3}s;opacity:${0.3+Math.random()*0.7}`;
+  starsEl.appendChild(s);
+}
+
+function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+function spawnParticles(x, y) {
+  for(let i = 0; i < 6; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = particles[Math.floor(Math.random()*particles.length)];
+    p.style.cssText = `left:${x+(Math.random()-0.5)*60}px;top:${y}px;color:${['#8b5cf6','#22d3ee','#fde047','#4ade80'][Math.floor(Math.random()*4)]};animation-duration:${0.6+Math.random()*0.4}s`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 900);
+  }
+}
+
+// 이전 날짜 미배정자 계산 → 다음 날 mustPick 세팅
+function computeMustPick(day) {
+  if(day === 'wed') { mustPick['wed'] = []; return; }
+  const prev = day === 'thu' ? 'wed' : 'thu';
+  const prevAssign = assignments[prev];
+  const rested = members.filter(n => prevAssign[n] === 'rest');
+  mustPick[day] = rested;
+}
+
+// mustPick 반영한 초기 순서 생성
+// mustPick 인원이 앞 4장 안에 무조건 들어오도록 섞기
+function buildOrder(day) {
+  const must = mustPick[day] || [];
+  const others = members.filter(n => !must.includes(n));
+  const shuffledOthers = shuffle(others);
+  // must 인원을 앞쪽(최대 4장 범위) 임의 위치에 삽입
+  const base = [...shuffledOthers];
+  const result = [];
+  const positions = shuffle([0,1,2,3]).slice(0, must.length);
+  positions.sort((a,b)=>a-b);
+  let bi = 0;
+  for(let i = 0; i < members.length; i++) {
+    if(positions.includes(i) && must.length > 0) {
+      result.push(must.shift());
+    } else {
+      result.push(base[bi++]);
+    }
+  }
+  return result;
+}
+
+function selectDay(day) {
+  currentDay = day;
+  days.forEach(d => document.getElementById('tab-'+d).classList.remove('active'));
+  document.getElementById('tab-'+day).classList.add('active');
+  if(!orders[day]) {
+    computeMustPick(day);
+    orders[day] = buildOrder(day);
+  }
+  renderCards();
+  updateResult();
+  updateGuide();
+  updateMustBanner();
+}
+
+function shuffleCards() {
+  assignments[currentDay] = {};
+  flippedCount[currentDay] = 0;
+  computeMustPick(currentDay);
+  orders[currentDay] = buildOrder(currentDay);
+  document.getElementById('tab-'+currentDay).classList.remove('done');
+  // 이 날 이후 날짜 초기화 (미배정자 재계산 위해)
+  if(currentDay === 'wed') {
+    assignments['thu'] = {}; flippedCount['thu'] = 0; orders['thu'] = null;
+    assignments['fri'] = {}; flippedCount['fri'] = 0; orders['fri'] = null;
+    document.getElementById('tab-thu').classList.remove('done');
+    document.getElementById('tab-fri').classList.remove('done');
+  } else if(currentDay === 'thu') {
+    assignments['fri'] = {}; flippedCount['fri'] = 0; orders['fri'] = null;
+    document.getElementById('tab-fri').classList.remove('done');
+  }
+  renderCards();
+  updateResult();
+  updateGuide();
+  updateMustBanner();
+  checkSummaryBtn();
+}
+
+function updateMustBanner() {
+  const banner = document.getElementById('must-banner');
+  const must = mustPick[currentDay] || [];
+  if(must.length > 0 && flippedCount[currentDay] < 4) {
+    banner.textContent = '⚠ 반드시 배정: ' + must.join(', ');
+    banner.classList.add('visible');
+  } else {
+    banner.classList.remove('visible');
+  }
+}
+
+function renderCards() {
+  const area = document.getElementById('cards-area');
+  area.innerHTML = '';
+  const order = orders[currentDay] || members;
+  const must = mustPick[currentDay] || [];
+  const assignedMust = must.filter(n => assignments[currentDay][n] && assignments[currentDay][n] !== 'rest');
+  const remainingSlots = 4 - flippedCount[currentDay];
+  const unassignedMust = must.filter(n => !assignments[currentDay][n]);
+
+  order.forEach((name, i) => {
+    const slot = assignments[currentDay][name];
+    const isFlipped = !!slot;
+    const isMust = unassignedMust.includes(name);
+    // 남은 슬롯 수 == 미배정 must 수 → must 카드만 클릭 가능
+    const onlyMustCanClick = unassignedMust.length > 0 && remainingSlots === unassignedMust.length;
+    const isClickable = !isFlipped && (!onlyMustCanClick || isMust);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'card-wrap' + (isFlipped || !isClickable ? ' locked' : '') + (isMust && !isFlipped ? ' must-pick' : '');
+    wrap.id = 'cwrap-'+i;
+
+    let frontHTML = '';
+    if(slot && slot !== 'rest') {
+      frontHTML = `<span class="slot-label ${slot}">${slot==='am'?'AM':'PM'}</span><span class="card-name-display">${name}</span>`;
+    } else if(slot === 'rest') {
+      frontHTML = `<span class="card-name-display" style="color:var(--gray);font-size:9px;">- - -<br>${name}<br>- - -</span>`;
+    }
+
+    wrap.innerHTML = `
+      <div class="card-inner${isFlipped?' flipped':''}" id="cinner-${i}">
+        <div class="card-face card-back">
+          <div class="card-back-sprite">
+            <span class="sprite-icon">${isMust && !isFlipped ? '⚠' : '🂠'}</span>
+          </div>
+          <span class="card-back-label">${isMust && !isFlipped ? 'MUST!' : 'CLICK!'}</span>
+        </div>
+        <div class="card-face card-front${slot?' '+slot:''}">${frontHTML}</div>
+      </div>`;
+
+    if(isClickable) {
+      wrap.onclick = (e) => {
+        const rect = wrap.getBoundingClientRect();
+        spawnParticles(rect.left + rect.width/2, rect.top);
+        flipCard(i, name);
+      };
+    }
+    area.appendChild(wrap);
+  });
+}
+
+function flipCard(i, name) {
+  const count = flippedCount[currentDay];
+  if(count >= 4) return;
+  const slot = count < 2 ? 'am' : 'pm';
+  assignments[currentDay][name] = slot;
+  flippedCount[currentDay]++;
+
+  const inner = document.getElementById('cinner-'+i);
+  const front = inner.querySelector('.card-front');
+  front.classList.add(slot);
+  front.innerHTML = `<span class="slot-label ${slot}">${slot==='am'?'AM':'PM'}</span><span class="card-name-display">${name}</span>`;
+  inner.classList.add('flipped');
+  const cwrap = document.getElementById('cwrap-'+i);
+  cwrap.classList.add('locked');
+  cwrap.classList.remove('must-pick');
+  cwrap.onclick = null;
+
+  updateResult();
+  updateGuide();
+  updateMustBanner();
+
+  if(flippedCount[currentDay] === 4) {
+    lockRest();
+    document.getElementById('tab-'+currentDay).classList.add('done');
+    checkSummaryBtn();
+    // 다음 날짜 mustPick 업데이트
+    if(currentDay === 'wed') { mustPick['thu'] = null; orders['thu'] = null; assignments['thu'] = {}; flippedCount['thu'] = 0; }
+    if(currentDay === 'thu') { mustPick['fri'] = null; orders['fri'] = null; assignments['fri'] = {}; flippedCount['fri'] = 0; }
+  } else {
+    // 남은 슬롯 == 미배정 must 수이면 re-render로 잠금 갱신
+    renderCards();
+  }
+}
+
+function lockRest() {
+  const order = orders[currentDay];
+  order.forEach((name, i) => {
+    if(!assignments[currentDay][name]) {
+      assignments[currentDay][name] = 'rest';
+      const inner = document.getElementById('cinner-'+i);
+      if(inner && !inner.classList.contains('flipped')) {
+        const front = inner.querySelector('.card-front');
+        front.classList.add('rest');
+        front.innerHTML = `<span class="card-name-display" style="color:var(--gray);font-size:9px;">- - -<br>${name}<br>- - -</span>`;
+        inner.classList.add('flipped');
+      }
+    }
+  });
+}
+
+function updateResult() {
+  const assign = assignments[currentDay];
+  document.getElementById('am-result').innerHTML = '';
+  document.getElementById('pm-result').innerHTML = '';
+  Object.entries(assign).forEach(([name, slot]) => {
+    if(slot === 'am') document.getElementById('am-result').innerHTML += `<span class="result-name">▸ ${name}</span>`;
+    if(slot === 'pm') document.getElementById('pm-result').innerHTML += `<span class="result-name">▸ ${name}</span>`;
+  });
+}
+
+function updateGuide() {
+  const count = flippedCount[currentDay];
+  const must = (mustPick[currentDay] || []).filter(n => !assignments[currentDay][n]);
+  const el = document.getElementById('guide');
+  if(count === 0) el.textContent = '카드를 한 장씩 클릭하세요!';
+  else if(count === 1) el.textContent = '오전 근무자 1명 더 뽑아주세요!';
+  else if(count === 2) el.textContent = '이제 오후 근무자를 뽑아주세요!';
+  else if(count === 3) el.textContent = '마지막 오후 근무자를 뽑아주세요!';
+  else el.textContent = '배정 완료! 다음 날짜 탭으로 이동하세요.';
+}
+
+function checkSummaryBtn() {
+  const allDone = days.every(d => flippedCount[d] >= 4);
+  document.getElementById('summary-btn').style.display = allDone ? 'block' : 'none';
+}
+
+function showSummary() {
+  const allDays = [
+    { key: null, label: '6/23(화)', all: true },
+    { key: 'wed', label: '6/24(수)', all: false },
+    { key: 'thu', label: '6/25(목)', all: false },
+    { key: 'fri', label: '6/26(금)', all: false },
+    { key: null, label: '6/27(토)', all: true },
+    { key: null, label: '6/28(일)', all: true },
+  ];
+  const tbody = document.getElementById('summary-rows');
+  tbody.innerHTML = '';
+  allDays.forEach(({ key, label, all }) => {
+    const row = document.createElement('div');
+    row.className = 'summary-row' + (all ? ' all-day' : '');
+    if(all) {
+      row.style.gridTemplateColumns = '100px 1fr';
+      row.innerHTML = `<div class="summary-cell summary-date">${label}</div><div class="summary-cell chip-all">전원 근무 ★</div>`;
+    } else {
+      const assign = assignments[key] || {};
+      const am = Object.entries(assign).filter(([,v])=>v==='am').map(([k])=>k).join(', ') || '—';
+      const pm = Object.entries(assign).filter(([,v])=>v==='pm').map(([k])=>k).join(', ') || '—';
+      row.innerHTML = `<div class="summary-cell summary-date">${label}</div><div class="summary-cell chip-am">${am}</div><div class="summary-cell chip-pm">${pm}</div>`;
+    }
+    tbody.appendChild(row);
+  });
+  const summary = document.getElementById('summary');
+  summary.classList.add('visible');
+  summary.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+selectDay('wed');
+</script>
+</body>
+</html>
